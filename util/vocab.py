@@ -46,7 +46,7 @@ def from_flickr_json(path):
     return captions
 
 def clean_str(string):
-    string = re.sub(r"[^A-Za-z0-9]", " ", string)
+    string = re.sub(r"[^A-Za-z0-9]", " ", string) #記号を空白に置換
     return string.strip().lower().split()
 
 def from_txt(txt):
@@ -73,7 +73,7 @@ def build_vocab(collection, text_style, threshold=4, rootpath=ROOT_PATH):
         #     print("[%d/%d] tokenized the captions." % (i, len(captions)))
 
     # Discard if the occurrence of the word is less than min_word_cnt.
-    words = [word for word, cnt in counter.items() if cnt >= threshold]
+    words = [word for word, cnt in counter.items() if cnt >= threshold] #threshold未満の出現単語をカットする
 
     # Create a vocab wrapper and add some special tokens.
     vocab = Vocabulary(text_style)
