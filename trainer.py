@@ -26,6 +26,9 @@ from basic.common import makedirsforfile, checkToSkip
 from basic.util import read_dict, AverageMeter, LogCollector
 from basic.generic_utils import Progbar
 
+
+from loss import TripletLoss
+
 INFO = __file__
 
 
@@ -201,6 +204,12 @@ def main():
         else:
             print("=> no checkpoint found at '{}'".format(opt.resume))
 
+    optimizer = torch.optim.Adam(model.parametors(), lr=1e-4)
+    loss_fn = TripletLoss(margin=0.2,
+                            measure='cos',
+                            max_violation=True,
+                            cost_style='sum',
+                            direction='all')
 
     # Train the Model
     best_rsum = 0
@@ -212,7 +221,7 @@ def main():
         print('Epoch[{0} / {1}] LR: {2}'.format(epoch, opt.num_epochs, get_learning_rate(model.optimizer)[0]))
         print('-'*10)
         # train for one epoch
-        train(opt, data_loaders['train'], model, epoch)
+        train(opt, data_loaders['train'], model, epoch, optimizer, loss_fn)
 
         # evaluate on validation set
         rsum = validate(opt, data_loaders['val'], model, measure=opt.measure)
@@ -276,7 +285,7 @@ def main():
     # os.system('./'+runfile)
 
 
-def train(opt, train_loader, model, epoch):
+def train(opt, train_loader, model, epoch, optimizer, loss_fn):
     # average meters to record the training statistics
     batch_time = AverageMeter()
     data_time = AverageMeter()
@@ -287,7 +296,32 @@ def train(opt, train_loader, model, epoch):
 
     progbar = Progbar(len(train_loader.dataset))
     end = time.time()
-    for i, train_data in enumerate(train_loader):
+
+    # for i, train_data in enumerate(train_loader):
+    #
+    #     # measure data loading time
+    #     data_time.update(time.time() - end)
+    #
+    #     # make sure train logger is used
+    #     model.logger = train_logger
+    #
+    #     # Update the model
+    #     b_size, loss = model.train_emb(*train_data)
+    #
+    #     progbar.add(b_size, values=[('loss', loss)])
+    #
+    #     # measure elapsed time
+    #     batch_time.update(time.time() - end)
+    #     end = time.time()
+    #
+    #     # Record logs in tensorboard
+    #     tb_logger.log_value('epoch', epoch, step=model.Eiters)
+    #     tb_logger.log_value('step', i, step=model.Eiters)
+    #     tb_logger.log_value('batch_time', batch_time.val, step=model.Eiters)
+    #     tb_logger.log_value('data_time', data_time.val, step=model.Eiters)
+    #     model.logger.tb_log(tb_logger, step=model.Eiters)
+
+    for i, (video_data, text_data, idxs, cap_ids, video_ids) in enumerate(train_loader):
 
         # measure data loading time
         data_time.update(time.time() - end)
@@ -296,9 +330,20 @@ def train(opt, train_loader, model, epoch):
         model.logger = train_logger
 
         # Update the model
-        b_size, loss = model.train_emb(*train_data)
+        model.Eiters += 1
+        model.logger.update('Eit', model.Eiters)
+        model.logger.update('lr', optimizer.param_groups[0]['lr'])
 
-        progbar.add(b_size, values=[('loss', loss)])
+        vid_emb, cap_emb = model(video_data, text_data)
+        loss = loss_fn(cap_emb, vid_emb)
+
+
+        optimizer.zero_grad()
+        loss.backward()
+        torch.nn.utils.clip_grad.clip_grad_norm_(model.parametors(), 2.0)
+        optimizer.step()
+
+        progbar.add(vid_emb.size(0), values=[('loss', loss.item())])
 
         # measure elapsed time
         batch_time.update(time.time() - end)

@@ -5,7 +5,7 @@ import torchvision.models as models
 from torch.autograd import Variable
 from torch.nn.utils.rnn import pack_padded_sequence, pad_packed_sequence
 import torch.backends.cudnn as cudnn
-from torch.nn.utils.clip_grad import clip_grad_norm  # clip_grad_norm_ for 0.4.0, clip_grad_norm for 0.3.1
+from torch.nn.utils.clip_grad import clip_grad_norm_  # clip_grad_norm_ for 0.4.0, clip_grad_norm for 0.3.1
 import numpy as np
 from collections import OrderedDict
 import torch.nn.functional as F
@@ -39,9 +39,7 @@ def l2norm(X):
 def xavier_init_fc(fc):
     """Xavier initialization for the fully connected layer
     """
-    r = np.sqrt(6.) / np.sqrt(fc.in_features +
-                             fc.out_features)
-    fc.weight.data.uniform_(-r, r)
+    torch.nn.init.xavier_uniform(fc.weight)
     fc.bias.data.fill_(0)
 
 
@@ -305,12 +303,14 @@ class BaseModel(object):
         # compute gradient and do SGD step
         loss.backward()
         if self.grad_clip > 0:
-            clip_grad_norm(self.params, self.grad_clip)
+            clip_grad_norm_(self.params, self.grad_clip)
         self.optimizer.step()
 
         return vid_emb.size(0), loss_value
 
-
+    def forward(self, videos, captions):
+        vid_emb, cap_emb = self.forward_emb(videos, captions, False)
+        return vid_emb, cap_emb
 
 class Dual_Encoding(BaseModel):
     """
